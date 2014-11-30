@@ -416,6 +416,7 @@ void plan_buffer_line (tActionRequest *pAction)
 
   block->action_type = AT_MOVE;
   block->power = pAction->param;
+  block->usec_pulse = pAction->param2;
   
   // Compute direction bits for this block
   block->direction_bits = 0;

@@ -41,10 +41,8 @@
 #include "config.h"
 #include "planner.h"
 
-
-#define TICKS_PER_MICROSECOND (1) // Ticker uses 1usec units
-// #define CYCLES_PER_ACCELERATION_TICK ((TICKS_PER_MICROSECOND*1000000)/ACCELERATION_TICKS_PER_SECOND)
-#define STEP_TIMER_FREQ 1000000 // 1 MHz
+#define MIN(a, b) ((a > b) ? b : a)
+#define MAX(a, b) ((a > b) ? a : b)
 
 // types: ramp state
 typedef enum {RAMP_UP, RAMP_MAX, RAMP_DOWN} tRamp;
@@ -75,6 +73,10 @@ static int32_t counter_x,       // Counter variables for the bresenham line trac
                counter_z;
 static int32_t counter_e, counter_l, pos_l; // extruder and laser
 static uint32_t step_events_completed; // The number of step events executed in the current block
+static uint32_t usec_per_step = 2000;	// number of steps between steps
+static uint32_t counter_motion = 0;	// number of interrupts before next step
+static uint32_t counter_pulse = 0;	// number of steps before laser off
+static uint32_t counter_timesteps = 0;
 
 // Variables used by the trapezoid generation
 //static uint32_t cycles_per_step_event;        // The number of machine cycles between each step event
@@ -190,6 +192,7 @@ void st_wake_up()
   if ( ! running )
   {
     running = 1;
+
     set_step_timer(2000);
     exhaust = 1; // turn air assist/exhaust on
     exhaust_timer.detach(); // cancel any pending timer
@@ -278,7 +281,16 @@ static inline void set_step_timer (uint32_t cycles)
 {
    extern GlobalConfig *cfg;
    volatile static double p;
-   timer.attach_us(&st_interrupt,cycles);
+
+   usec_per_step = cycles/TICKS_PER_MICROSECOND;
+   counter_motion  = usec_per_step;
+   counter_pulse = current_block->usec_pulse / TICKS_PER_MICROSECOND;
+
+   counter_timesteps = MIN(counter_pulse, counter_motion);
+   if (counter_timesteps == 0)
+   	counter_timesteps = MAX(counter_pulse, counter_motion);
+   timer.attach_us(&st_interrupt, counter_timesteps * TICKS_PER_MICROSECOND);
+
    // p = to_double(pwmofs + mul_f( pwmscale, ((power>>6) * c_min) / ((10000>>6)*cycles) ) );
    // p = ( to_double(c_min) * current_block->power) / ( 10000.0 * (double)cycles);
   // p = (60E6/nominal_rate) / cycles; // nom_rate is steps/minute,
@@ -295,6 +307,23 @@ static inline void set_step_timer (uint32_t cycles)
 static  void st_interrupt (void)
 {
   // TODO: Check if the busy-flag can be eliminated by just disabeling this interrupt while we are in it
+
+  if (counter_pulse)
+    counter_pulse -= counter_timesteps;
+  if (counter_pulse == 0)
+    *laser = LASEROFF;
+
+  if (counter_motion)
+    counter_motion -= counter_timesteps;
+
+  if (counter_motion) {
+    counter_timesteps = MIN(counter_pulse, counter_motion);
+    if (counter_timesteps == 0)
+    	counter_timesteps = MAX(counter_pulse, counter_motion);
+    timer.attach_us(&st_interrupt, counter_timesteps * TICKS_PER_MICROSECOND);
+    return;
+  }
+  counter_motion  = usec_per_step;
 
   if(busy){ /*printf("busy!\n"); */ return; } // The busy-flag is used to avoid reentering this interrupt
   busy = 1;
@@ -353,6 +382,7 @@ static  void st_interrupt (void)
    {
      *laser = ( current_block->options & OPT_LASER_ON ? LASERON : LASEROFF);
    }
+   counter_pulse = current_block->usec_pulse;
 
     if (current_block->action_type == AT_MOVE)
     {

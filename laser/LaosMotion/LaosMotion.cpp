@@ -36,6 +36,7 @@ int command=0;
 int mark_speed = 100; // 100 [mm/sec]
 int bitmap_speed = 100; // 100 [mm/sec]
 int power = 10000 ;
+int pulse_freq = 1;	// always on for entire pixel
 // next planner action to enqueue
 tActionRequest  action;
 
@@ -46,7 +47,7 @@ static int ofsx=0, ofsy=0, ofsz=0;
 int param=0, val=0;
 
 // Bitmap buffer
-#define BITMAP_PIXELS  (8192)
+#define BITMAP_PIXELS  (16384)
 #define BITMAP_SIZE (BITMAP_PIXELS/32)
 unsigned long bitmap[BITMAP_SIZE];
 unsigned long bitmap_width=0; // nr of pixels
@@ -80,9 +81,11 @@ LaosMotion::LaosMotion()
   reset();
   mark_speed = cfg->speed;
   bitmap_speed = cfg->xspeed;
+  pulse_freq = 1;		// allways on for entire pixel
   action.param = 0;
   action.target.x = action.target.y = action.target.z = action.target.e =0;
   action.target.feed_rate = 60*mark_speed;
+  action.target.pulse_freq = pulse_freq;
 
 #if DO_MOTION_TEST
   t.start();
@@ -171,6 +174,7 @@ void LaosMotion::moveTo(int x, int y, int z)
    action.target.z = ofsz + z/1000.0;
    action.ActionType = AT_MOVE;
    action.target.feed_rate =  60.0 * cfg->speed;
+   action.target.pulse_freq = pulse_freq;
    plan_buffer_line(&action);
    //printf("To buffer: %d, %d, %d\n", x, y, z);
 }
@@ -186,6 +190,7 @@ void LaosMotion::moveTo(int x, int y, int z, int speed)
    action.target.z = ofsz + z/1000.0;
    action.ActionType = AT_MOVE;
    action.target.feed_rate =  (speed * 60.0 * cfg->speed) / 100;
+   action.target.pulse_freq = pulse_freq;
    plan_buffer_line(&action);
    //printf("To buffer: %d, %d, %d, %d\n", x, y,z,speed);
 }
@@ -228,6 +233,7 @@ void LaosMotion::write(int i)
                 step=0;
                 action.target.z = 0;
                 action.param = power;
+		action.param2 = STEP_TIMER_FREQ / pulse_freq;
                 action.ActionType =  (command ? AT_LASER : AT_MOVE);
                 if ( bitmap_enable && (action.ActionType == AT_LASER))
                 {
@@ -266,6 +272,7 @@ void LaosMotion::write(int i)
                 action.param = power;
                 action.ActionType =  AT_MOVE;
                 action.target.feed_rate =  60.0 * cfg->speed;
+		action.target.pulse_freq = pulse_freq;
                 plan_buffer_line(&action);
                 break;
             }
@@ -315,6 +322,11 @@ void LaosMotion::write(int i)
                       printf("> power: %i\n",power);
                     #endif	
                     break;
+		  case 102:
+		    if ( val < 1) val = 1;
+		    if ( val > STEP_TIMER_FREQ) val = STEP_TIMER_FREQ;
+		    pulse_freq = val;
+		    break;
                 }
                 break;
             }

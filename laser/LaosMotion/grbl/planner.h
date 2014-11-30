@@ -38,6 +38,7 @@ typedef  struct {
   float  z;
   float  e;
   float  feed_rate;
+  float  pulse_freq;
 } tTarget;
 
 // options for the action
@@ -82,6 +83,7 @@ typedef struct
   uint8_t check_endstops; // for homing moves
   uint8_t options; // for further options (e.g. laser on/off, homing on axis, dwell, etc)  
   uint16_t power; // laser power setpoint
+  uint32_t usec_pulse;
 } block_t;
 
 // This defines an action to enque, with its target position
@@ -89,6 +91,7 @@ typedef struct {
   eActionType ActionType;
   tTarget     target;  
   uint16_t    param; // argument for the action
+  uint32_t    param2; // argument for the action
 } tActionRequest;
 
 

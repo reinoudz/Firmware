@@ -91,6 +91,12 @@ extern volatile int32_t actpos_x, actpos_y, actpos_z, actpos_e;
 // the buffer to help with the computational efficiency of generating arcs.
 #define N_ARC_CORRECTION 25 
 
+
+// stepper settings
+#define TICKS_PER_MICROSECOND (5) // Ticker uses 1usec units
+// #define CYCLES_PER_ACCELERATION_TICK ((TICKS_PER_MICROSECOND*1000000)/ACCELERATION_TICKS_PER_SECOND)
+#define STEP_TIMER_FREQ 1000000 // 1 MHz
+
 // end
 
 #define LIMIT_MASK ((1<<X_LIMIT_BIT)|(1<<Y_LIMIT_BIT)|(1<<Z_LIMIT_BIT)) // All limit bits
